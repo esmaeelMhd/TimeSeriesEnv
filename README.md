@@ -100,7 +100,7 @@ This command allows you to monitor the environment’s progress and debug any is
 
 The environment is configured via a YAML file, which allows for flexible and easy-to-read configuration settings.
 
-**Example Configuration** (`config.yaml`)
+### Example Configuration (`config.yaml`)
 
 Below is an example of what your `config.yaml` might look like:
 
@@ -134,7 +134,7 @@ reward_function_config:
 reward_function_type: 'linear_pmt'
 ```
 
-**Key Configuration Options**
+### Key Configuration Options
 
 - `use_gpu`: Boolean flag to enable or disable GPU usage.
 - `env_config`: Configurations for the environment, such as the results folder and sequence length.
