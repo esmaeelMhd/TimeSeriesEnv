@@ -1,283 +1,255 @@
 # TimeSeriesEnv
 
-## Overview
+TimeSeriesEnv is a Gymnasium-style reinforcement learning environment for control and evaluation on time-series data.
 
-**TimeSeriesEnv** is a customizable and scalable environment designed for training and evaluating machine learning models on time series data. The environment supports multi-GPU training, interactive visualizations, flexible configuration through YAML files, and robust logging for monitoring and debugging.
+The environment sits between an agent and a forecasting model. At each step, the agent supplies action variables, the predictor estimates the next target variables from the recent sequence, and a custom reward function scores the result. This makes the project useful for testing control policies against learned sequence models and historical time-series data.
 
-## Features
+## What It Provides
 
-- **Multi-GPU Support**: Efficiently utilizes multiple GPUs for large-scale training tasks.
-- **Interactive Visualizations**: Leverages Plotly for interactive, real-time plotting of model performance.
-- **Flexible Configuration**: Easily configure the environment using YAML files or command-line arguments.
-- **Robust Logging**: Comprehensive logging system for tracking model performance and debugging.
-- **Automated Documentation**: Supports Sphinx for automatically generating project documentation.
+- A continuous-control `TimeSeriesEnv` built on Gymnasium.
+- Configurable action, exogenous, target, observation, and time-feature variables.
+- CSV-based time-series loading with sorted datetime indexes and frequency checks.
+- Optional simple, cyclic, spline, or one-hot time features.
+- Pluggable predictors, PyTorch models, checkpoints, and scaler handling.
+- Custom reward functions through the `BaseRewardFunction` interface.
+- Episode controls for fixed or random starts and lengths.
+- Optional logging, plotting, and early truncation.
 
-## Table of Contents
+## Project Layout
 
-1. [Installation](#installation)
-2. [Quick Start](#quick-start)
-3. [Configuration](#configuration)
-4. [Usage](#usage)
-5. [Examples](#examples)
-6. [Testing](#testing)
-7. [Logging](#logging)
-8. [Contributing](#contributing)
-9. [Citation](#citation)
-10. [License](#license)
+```text
+.
+|-- models.py                         # Example LSTM and encoder-decoder LSTM models
+|-- setup.py                          # Package metadata and base dependencies
+|-- test.py                           # Legacy integration sketch
+|-- time_series_env/
+|   |-- env.py                        # Core Gymnasium environment
+|   |-- env_register.py               # Gymnasium environment registration helper
+|   |-- time_series_data.py           # Dataset loading and variable grouping
+|   |-- model_builder.py              # Model, checkpoint, scaler, and predictor wiring
+|   |-- predictors.py                 # Generic model predictor wrappers
+|   |-- scaler_handler.py             # MinMaxScaler load/fit/transform helpers
+|   |-- base_reward.py                # Reward-function base class
+|   |-- data_util.py                  # Time-feature utilities
+|   |-- early_trunc.py                # Early truncation helper
+|   `-- visualization.py              # Matplotlib plotting helpers
+`-- LICENCE                           # Creative Commons BY-NC 4.0 license text
+```
 
 ## Installation
 
-### Prerequisites
-
-Before setting up the `TimeSeriesEnv` project, ensure you have the following installed:
-
-- **Python 3.8+**: The project is compatible with Python versions 3.8 and above.
-- **pip**: Python's package installer, used to install dependencies.
-- **Git**: Version control system to clone the repository.
-
-### Clone the Repository
-
-First, clone the repository from GitHub:
-
 ```bash
-git clone https://github.com/esmaeelMoh/timeseriesenv.git
-cd timeseriesenv
+git clone https://github.com/esmaeelMhd/TimeSeriesEnv.git
+cd TimeSeriesEnv
+
+python -m venv .venv
 ```
 
-### Install Dependencies
+On Windows PowerShell:
 
-Next, install the required Python packages using `pip`:
-
-```bash
-pip install -r requirements.txt
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
-This command installs all necessary packages listed in the `requirements.txt` file.
-
-### Optional: Install Additional Tools
-
-If you plan to work on the documentation or run tests, you may want to install additional tools like Sphinx for generating documentation:
+On macOS or Linux:
 
 ```bash
-pip install sphinx
+source .venv/bin/activate
 ```
 
-## Quick Start
-
-Here’s a brief guide to quickly get started with the `TimeSeriesEnv` project:
-
-1. **Create a Configuration File**: 
-
-Start by creating a configuration file based on the provided example:
+Install the package in editable mode:
 
 ```bash
-cp config_example.yaml config.yaml
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-Edit `config.yaml` to suit your specific needs.
-
-2. **Run the Environment**:
-
-With your configuration file ready, you can run the environment using the following command:
+The current `setup.py` lists the base dependencies, but the code also imports a few packages that are not declared there yet. Install them explicitly if needed:
 
 ```bash
-python env_register.py --config=config.yaml
+python -m pip install gymnasium pyyaml scikit-learn joblib matplotlib
 ```
 
-This command initializes the environment according to the settings in `config.yaml`.
+## Data Requirements
 
-3. **View the Logs**: 
+`TimeSeriesData` expects a CSV file with:
 
-Logs are saved in the `logs/` directory by default. You can view them with:
+- a datetime column named `date`;
+- numeric action, exogenous, target, and observation columns;
+- a mostly uniform timestamp frequency;
+- missing numeric values that can be safely forward-filled.
 
-```bash
-tail -f logs/environment.log
+Example:
+
+```csv
+date,control_1,weather_1,target_1
+2024-01-01 00:00:00,0.20,12.5,5.1
+2024-01-01 01:00:00,0.25,12.8,5.0
+2024-01-01 02:00:00,0.23,12.6,4.9
 ```
 
-This command allows you to monitor the environment’s progress and debug any issues.
+## Configuration Shape
 
-## Configuration
-
-The environment is configured via a YAML file, which allows for flexible and easy-to-read configuration settings.
-
-### Example Configuration (`config.yaml`)
-
-Below is an example of what your `config.yaml` might look like:
+Most projects will keep their environment, data, model, scaler, and reward settings in YAML. The registration helper expects these top-level sections:
 
 ```yaml
-use_gpu: true
-
-env_config:
-  results_folder: './results'
-  seq_len: 10
-  num_envs: 1
-  mode: 'not_live'
+data_config:
+  data_root_path: ./data
+  data_name: time_series.csv
+  index_col: date
+  time_f: true
+  has_time_f: false
+  num_time_f: 0
+  time_f_list: [hour, month, day_of_week]
+  time_f_type: cyclic
+  act_vars: [control_1]
+  exog_vars: [weather_1]
+  target_vars: [target_1]
+  obs_vars: [target_vars, exog_vars, time_vars]
 
 model_config:
-  model_type: 'LSTM'
-  data_root_path: './data'
-  data_name: 'time_series_data.csv'
-  index_col: 'date'
-  model_name: 'MyModel'
-  ctrl_vars: ['ctrl_var1', 'ctrl_var2']
-  ind_vars: ['ind_var1', 'ind_var2']
-  target_vars: ['target_var1']
-  num_time_f: 5
-  time_scaled: true
-  checkpoint_path: './checkpoints'
-  checkpoint: 'model_checkpoint.pth'
+  load_model: false
+  scale_data: false
+  chkpt_root_path: ./checkpoints
+  chkpt_folder: ""
+  chkpt_name: ""
+  device: cpu
 
-reward_function_config:
-  target: 'T1_PO4'
-  q_column: 'IN_Q'
+scaler_config:
+  load_scaler: false
+  scaler_root_path: ./scalers
+  scaler_folder: ""
+  scale_time_f: false
+  data_scaler_name: data_scaler.pkl
+  time_scaler_name: time_scaler.pkl
 
-reward_function_type: 'linear_pmt'
+env_config:
+  use_gpu: false
+  mode: not_live
+  seq_len: 24
+  const_el: 168
+  min_el: 24
+  max_el: 168
+  results_root_path: ./results
+  min_max_bounds: true
+  do_logging: false
+
+reward_config:
+  target: target_1
 ```
 
-### Key Configuration Options
+## Minimal Usage Pattern
 
-- `use_gpu`: Boolean flag to enable or disable GPU usage.
-- `env_config`: Configurations for the environment, such as the results folder and sequence length.
-- `model_config`: Model-specific settings, including model type, data paths, and checkpoints.
-- `reward_function_config`: Settings for the reward function used during training.
+You need three pieces before creating an environment:
 
-## Usage
-
-### Running the Environment
-
-To start the environment using your custom configuration:
-
-```bash
-python env_register.py --config=config.yaml
-```
-
-### Command-Line Overrides
-
-You can override any configuration option directly from the command line. For example, to disable GPU usage and change the sequence length:
-
-```bash
-python env_register.py --config=config.yaml --use_gpu=False --env_config.seq_len=20
-```
-
-### Multi-GPU Setup
-
-If you have multiple GPUs available, the environment will automatically detect and utilize them. Ensure that `use_gpu` is set to `True` in your configuration.
-
-## Examples
-
-### Basic Example
-
-Below is a basic example of how to use `TimeSeriesEnv` in a script:
+1. a `TimeSeriesData` instance or equivalent data object;
+2. a predictor, model, or `ModelBuilder` with a `predict(sequence)` method;
+3. a reward function derived from `BaseRewardFunction`.
 
 ```python
-import gym
+import numpy as np
 
-# Initialize the environment
-env = gym.make('TimeSeriesEnv-v0')
+from time_series_env.base_reward import BaseRewardFunction
+from time_series_env.env import TimeSeriesEnv
+from time_series_env.time_series_data import TimeSeriesData
 
-# Set agent arguments
-agent_args = {
-    'obs_history': 1,
-    'experiment': 1,
-    'min_el': 10,
-    'max_el': 360,
-    'const_el': 10,
-    'norm_values': True,
-    'title': 'test',
-    'agent_name': 'test_env_register'
-}
-env.set_agent_args(agent_args)
 
-# Run the environment
-state = env.reset()
+class LastValuePredictor:
+    def predict(self, sequence):
+        # Return one prediction for one target variable.
+        return np.array([[sequence[-1, -1]]], dtype=np.float32)
+
+
+class NegativeTargetReward(BaseRewardFunction):
+    def calculate_reward(self, source="predicted"):
+        if source == "actual":
+            values = self.env.df[self.env.target_vars[0]]
+            self.actual_rewards = -values.abs()
+            return self.actual_rewards
+
+        return -abs(float(self.env.get_targets()[0]))
+
+
+data = TimeSeriesData(
+    data_root_path="./data",
+    data_name="time_series.csv",
+    index_col="date",
+    time_f=True,
+    has_time_f=False,
+    num_time_f=0,
+    time_f_list=["hour", "month", "day_of_week"],
+    time_f_type="cyclic",
+    act_vars=["control_1"],
+    exog_vars=["weather_1"],
+    target_vars=["target_1"],
+    obs_vars=["target_vars", "exog_vars", "time_vars"],
+)
+
+env = TimeSeriesEnv(
+    use_gpu=False,
+    data=data,
+    predictor=LastValuePredictor(),
+    reward_function=NegativeTargetReward(),
+    seq_len=24,
+    const_el=168,
+    min_el=24,
+    max_el=168,
+    mode="print_status",
+)
+
+obs, info = env.reset()
 done = False
+
 while not done:
-    action = env.choose_real_action()
-    state, reward, done, _, info = env.step(action)
-    print(f"State: {state}, Reward: {reward}, Done: {done}")
+    action = env.choose_actual_action()
+    obs, reward, done, truncated, info = env.step(action)
 
 env.close()
 ```
 
-This script demonstrates initializing the environment, setting agent arguments, running the environment through its steps, and finally closing the environment.
+## Registering With Gymnasium
 
-## Testing
+Use `env_register` when you want to create the environment through `gymnasium.make`:
 
-### Unit Tests
+```python
+import gymnasium as gym
 
-Unit tests are included to verify that the environment works as expected. To run all the tests, use the following command:
+from time_series_env.env_register import env_register
+
+
+env_register(
+    env_id="TimeSeriesEnv-v1",
+    config=config,
+    data=data,
+    model=model,
+    model_builder=model_builder,
+    scaler_handler=scaler_handler,
+    reward_function=reward_function,
+)
+
+env = gym.make("TimeSeriesEnv-v1")
+```
+
+## Repository Status Notes
+
+- This checkout does not include sample data, checkpoints, or a ready-to-run `config.yaml`.
+- `test.py`, `reg_env.py`, and `reg_time_series_env.py` reference project-specific modules such as `load_my_args`, `linear_models`, and `former_models` that are not tracked in this repository.
+- `main.py` references `register_env_from_config`, but the current `time_series_env/env_register.py` exposes `env_register`.
+- `time_series_env/__init__.py` imports `data_providers`, which is not present as a source file in this checkout.
+
+Treat those files as legacy integration sketches until the missing local modules are restored or the examples are updated.
+
+## Development
+
+Useful checks while working on the project:
 
 ```bash
-python -m unittest discover tests
+python -m compileall .
+python -m unittest test.py
 ```
 
-This command runs all tests in the `tests` directory, ensuring that your environment behaves correctly.
-
-### Continuous Integration
-
-This project is set up for continuous integration using GitHub Actions. This setup ensures that tests are automatically run on every commit, helping maintain code quality.
-
-## Logging
-
-Logging is an essential part of monitoring the environment's behavior and debugging any issues that arise.
-
-### Default Logging Behavior
-
-By default, logs are saved in the `logs/` directory. The logging system captures detailed information about the environment’s execution, such as initialization details, rewards received, and any errors encountered.
-
-### Example Log Output
-
-Here’s what a typical log file might look like:
-
-```bash
-2024-08-22 12:00:00 - INFO - Environment initialized with config: config.yaml
-2024-08-22 12:00:01 - INFO - Episode started. Initial state: [0.1, 0.2, 0.3]
-2024-08-22 12:00:02 - INFO - Reward Received: 1.0, Total Reward: 1.0
-```
-
-### Adjusting Log Levels
-
-You can adjust the verbosity of the logs by modifying the log level in the `setup_logging` function. Available levels include `DEBUG`, `INFO`, `WARNING`, and `ERROR`.
-
-## Contributing
-
-We welcome and encourage contributions to `TimeSeriesEnv`! Here’s how you can contribute:
-
-1. **Fork the Repository**: Create a fork of the project on GitHub to work on your changes.
-2. **Create a Feature Branch**: Make a new branch for your feature or bugfix.
-3. **Write Tests**: Ensure that your changes are covered by unit tests to maintain code quality.
-4. **Submit a Pull Request**: When your changes are ready, submit a pull request with a clear description of the improvements or fixes you’ve made.
-
-### Code Style
-
-Please adhere to the PEP 8 style guide for Python code. We recommend using tools like `flake8` or `black` to automatically format your code and ensure consistency.
-
-## Citation
-
-If you use `TimeSeriesEnv` in your research or projects, please cite our paper:
-
-```css
-@article{YourLastName2024TimeSeriesEnv,
-  title={TimeSeriesEnv: A Scalable Environment for Time Series Analysis},
-  author={Your Name and Co-Author Name},
-  journal={arXiv preprint arXiv:2401.12345},
-  year={2024},
-  url={https://arxiv.org/abs/2401.12345}
-}
-```
+The unittest command currently depends on the missing local modules noted above.
 
 ## License
 
-This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International Public License. 
-
-You are free to:
-
-- **Share**: Copy and redistribute the material in any medium or format.
-- **Adapt**: Remix, transform, and build upon the material.
-
-Under the following terms:
-
-- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
-- **NonCommercial**: You may not use the material for commercial purposes.
-
-For more details, please see the full license in the [LICENSE](LICENSE.md) file located in this repository, or visit [https://creativecommons.org/licenses/by-nc/4.0/](https://creativecommons.org/licenses/by-nc/4.0/).
+This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International Public License. See [LICENCE](LICENCE) for the full text.
