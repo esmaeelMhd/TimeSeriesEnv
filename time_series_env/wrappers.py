@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import numpy as np
 
 class NormalizeObservationWrapper(gym.Wrapper):
@@ -51,11 +51,11 @@ class NormalizeObservationWrapper(gym.Wrapper):
 
         Returns:
         --------
-        np.ndarray
-            Normalized initial observation.
+        tuple
+            Normalized initial observation and info dictionary.
         """
-        observation = self.env.reset(**kwargs)
-        return self.normalize(observation)
+        observation, info = self.env.reset(**kwargs)
+        return self.normalize(observation), info
 
     def step(self, action):
         """
@@ -64,10 +64,10 @@ class NormalizeObservationWrapper(gym.Wrapper):
         Returns:
         --------
         tuple
-            Normalized observation, reward, done flag, and info.
+            Normalized observation, reward, terminated flag, truncated flag, and info.
         """
-        observation, reward, done, info = self.env.step(action)
-        return self.normalize(observation), reward, done, info
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        return self.normalize(observation), reward, terminated, truncated, info
 
     def normalize(self, observation):
         """

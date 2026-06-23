@@ -111,10 +111,10 @@ def filter_kwargs(kwargs, valid_keys):
     return {k: v for k, v in kwargs.items() if k in valid_keys}
 
 # === dataset =================================================================
-def load_dataset(data_root_path, data_name):
+def load_dataset(data_root_path, data_name, index_col="date"):
     """Loads the dataset used in training the model."""
     dataset_path = os.path.join(data_root_path, data_name)
-    df = pd.read_csv(dataset_path, index_col=["date"], parse_dates=["date"])
+    df = pd.read_csv(dataset_path, index_col=index_col, parse_dates=[index_col])
     df.sort_index(inplace=True)
     df = df.astype('float32').ffill()
     

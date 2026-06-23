@@ -69,24 +69,33 @@ class TimeSeriesData:
         
     def __post_init__(self):    
         """Post-initialization to validate and process the dataclass fields."""   
-        self.df = load_dataset(self.data_root_path, self.data_name)
+        self.df = load_dataset(self.data_root_path, self.data_name, self.index_col)
         
         self._validate_time_features()
         if self.time_f:
             if not self.has_time_f:
                 self._add_time_features()
-            self.time_vars = self.df.columns[-self.num_time_f:]
+            self.time_vars = list(self.df.columns[-self.num_time_f:])
         else:
             self.num_time_f = 0
+            self.time_vars = []
+
+        self.columns = self.df.columns
         
         # Setup action and exogenous variables
         self.act_vars, self.num_act = self._parse_variables(['act_vars', 'act_variable'])
         self.exog_vars, self.num_exog = self._parse_variables(['exog_vars', 'exog_variable'])
-        self.target_vars, self.num_target = self._parse_variables(['target_vars', 'target_variable'])  
-        self.obs_vars = self.target_vars if self.obs_vars is None else self._process_observation_variables()
+        self.target_vars, self.num_target = self._parse_variables(['target_vars', 'target_variable'])
+        if self.obs_vars is None:
+            self.obs_vars = self.target_vars
+        else:
+            if isinstance(self.obs_vars, str):
+                self.obs_vars = [self.obs_vars]
+            self.obs_vars = self._process_observation_variables()
         
         if len(self.exog_vars) != len(self.df.columns) - (len(self.act_vars) + len(self.target_vars) + self.num_time_f):
-            self.exog_vars = [col for col in self.df.columns[:len(self.columns)-self.num_time_f] if col not in self.act_vars and col not in self.target_vars]
+            data_columns = self.df.columns[:len(self.df.columns) - self.num_time_f]
+            self.exog_vars = [col for col in data_columns if col not in self.act_vars and col not in self.target_vars]
         
         self._validate_and_convert_vars()
     
@@ -130,7 +139,7 @@ class TimeSeriesData:
             else:
                 expanded_obs_vars.append(var)
                 
-        return list(set(expanded_obs_vars))
+        return list(dict.fromkeys(expanded_obs_vars))
         
     def _validate_and_convert_vars(self) -> None:
         """Validates and converts control, independent, and target variables into lists if they are not already."""

@@ -1,6 +1,3 @@
-import os
-import sys
-
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,7 +6,6 @@ from gymnasium.envs.registration import register
 from .env import TimeSeriesEnv
 from .env_util import filter_kwargs, get_class_attributes
 from .time_series_data import TimeSeriesData
-from .model_builder import ModelBuilder
 from .scaler_handler import ScalerHandler
 from .config_util import load_config
 
@@ -33,6 +29,7 @@ class CustomEnvRegistrar:
     env_id: str
     data: Any = None
     model_builder: Any = None
+    predictor: Any = None
     reward_function: Any = None
     env_kwargs: dict = field(default_factory=dict)
 
@@ -61,6 +58,7 @@ class CustomEnvRegistrar:
         env = TimeSeriesEnv(
             data=self.data,
             model_builder=self.model_builder,
+            predictor=self.predictor,
             reward_function=self.reward_function,
             **all_kwargs  # Pass all kwargs (merged)
         )
@@ -73,6 +71,7 @@ def env_register(
     data=None, 
     model=None, 
     model_builder=None,
+    predictor=None,
     scaler_handler=None,
     reward_function=None,
     config_file=None,
@@ -96,8 +95,8 @@ def env_register(
     - Dictionary mode: Provide config dictionaries directly.
     - Individual arguments mode: Provide variables directly (e.g., env_param1=value, model_param1=value).
     """
-    if model is None:
-        raise ValueError('A model must be provided.')
+    if model is None and model_builder is None and predictor is None:
+        raise ValueError('A model, model_builder, or predictor must be provided.')
     
     if reward_function is None:
         raise ValueError('A reward_function must be provided.')
@@ -112,13 +111,11 @@ def env_register(
 
     # Load the configuration sections from config or initialize empty
     data_kwargs = config.get('data_config', {})
-    model_builder_kwargs = config.get('model_config', {})
     scaler_kwargs = config.get('scaler_config', {})
     env_kwargs = config.get('env_config', {})
 
     # Handle kwargs (manual variables passed directly)
     data_kwargs.update(filter_kwargs(kwargs, get_class_attributes(TimeSeriesData)))
-    model_builder_kwargs.update(filter_kwargs(kwargs, get_class_attributes(ModelBuilder)))
     scaler_kwargs.update(filter_kwargs(kwargs, get_class_attributes(ScalerHandler)))
     env_kwargs.update(filter_kwargs(kwargs, get_class_attributes(TimeSeriesEnv)))
 
@@ -128,8 +125,13 @@ def env_register(
     if data is None:
         data = TimeSeriesData(**data_kwargs)
 
-    if model_builder is None:
-        if scaler_handler is None and model_builder_kwargs['scale_data']:
+    if model_builder is None and predictor is None:
+        from .model_builder import ModelBuilder
+
+        model_builder_kwargs = config.get('model_config', {})
+        model_builder_kwargs.update(filter_kwargs(kwargs, get_class_attributes(ModelBuilder)))
+
+        if scaler_handler is None and model_builder_kwargs.get('scale_data', False):
             scaler_handler = ScalerHandler(**scaler_kwargs)
             
         model_builder = ModelBuilder(**model_builder_kwargs,
@@ -140,5 +142,6 @@ def env_register(
 
     # Register and create the environment
     CustomEnvRegistrar(env_id=env_id, data=data, model_builder=model_builder,
-                       reward_function=reward_function, env_kwargs=env_kwargs)
+                       predictor=predictor, reward_function=reward_function,
+                       env_kwargs=env_kwargs)
 

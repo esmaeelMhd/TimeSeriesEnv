@@ -283,6 +283,9 @@ class TimeSeriesEnv(gym.Env):
         self.ep_len = 0
         self.ep_start = 0
         self.info = {}
+        self.round = 0
+        self.done = False
+        self.truncated = False
     
     def _initialize_evaluation(self) -> None:
         """Initialize evaluation settings if in eval mode."""
@@ -708,6 +711,8 @@ class TimeSeriesEnv(gym.Env):
         self.actions = np.empty((0, len(self.act_idxs)))
         self.episode_num += 1
         self.round = 0
+        self.done = False
+        self.truncated = False
 
     def _initialize_episode(self, eval_starts: str) -> None:
         """Initialize the episode configuration based on evaluation mode."""
@@ -851,6 +856,7 @@ class TimeSeriesEnv(gym.Env):
         # Increment the round counter and update info
         self.round += 1
         info = {'round': self.round}
+        self.info = info
     
         # Predict the next targets and clip if necessary
         predicted_targets = self._state_predictor()
@@ -869,6 +875,7 @@ class TimeSeriesEnv(gym.Env):
     
         # Check termination conditions
         done = self._check_done()
+        self.done = done
     
         # Check for early truncation if applicable
         if self.do_early_trunc:

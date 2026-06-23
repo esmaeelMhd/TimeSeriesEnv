@@ -7,8 +7,6 @@ import torch
 from dataclasses import dataclass, fields
 from typing import Union, Any
 
-#from data_providers import former_data
-
 @dataclass(eq=False)
 class Predictor:
     """
