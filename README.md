@@ -49,7 +49,6 @@ TimeSeriesData ---> TimeSeriesEnv <--- agent action
 .
 |-- examples/
 |   `-- minimal_env.py                # End-to-end runnable synthetic example
-|-- legacy/                           # Archived project-specific integration sketches
 |-- tests/
 |   `-- test_smoke.py                 # Import, reset/step, and registration tests
 |-- time_series_env/
@@ -265,10 +264,6 @@ env_register(
 
 env = gym.make("TimeSeriesEnv-v1")
 ```
-
-## Legacy Scripts
-
-Older project-specific integration scripts are archived under `legacy/`. They are retained for context but are not part of the public runnable path because they reference local configuration, private data, or untracked checkpoint utilities.
 
 ## License
 
